@@ -1,7 +1,7 @@
 
 export default {
   async fetch(request, env) {
-    const cors = {
+    const headers = {
       "Access-Control-Allow-Origin": "https://christoph1807.github.io",
       "Access-Control-Allow-Methods": "POST, OPTIONS",
       "Access-Control-Allow-Headers": "Content-Type",
@@ -9,24 +9,25 @@ export default {
     };
 
     if (request.method === "OPTIONS") {
-      return new Response(null, { headers: cors });
+      return new Response(null, { headers });
     }
 
     if (request.method !== "POST") {
-      return new Response(JSON.stringify({ error: "POST erforderlich" }), {
-        status: 405, headers: cors
-      });
+      return new Response(
+        JSON.stringify({ message: "JARVIS ist bereit." }),
+        { headers }
+      );
     }
 
     try {
       const { message } = await request.json();
 
-      if (!env.GEMINI_API_KEY) {
-        throw new Error("Gemini API-Key fehlt.");
+      if (!message) {
+        throw new Error("Keine Nachricht erhalten.");
       }
 
-      const result = await fetch(
-        "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent",
+      const response = await fetch(
+        "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent",
         {
           method: "POST",
           headers: {
@@ -36,7 +37,7 @@ export default {
           body: JSON.stringify({
             systemInstruction: {
               parts: [{
-                text: "Du bist JARVIS, ein intelligenter persönlicher Assistent. Antworte auf Deutsch, freundlich und präzise."
+                text: "Du bist JARVIS, ein intelligenter persönlicher Assistent. Antworte immer auf Deutsch, freundlich, klar und hilfreich."
               }]
             },
             contents: [{
@@ -47,23 +48,28 @@ export default {
         }
       );
 
-      const data = await result.json();
+      const data = await response.json();
 
-      if (!result.ok) {
-        throw new Error(data.error?.message || "Gemini-Fehler");
+      if (!response.ok) {
+        throw new Error(
+          data.error?.message || "Fehler bei Gemini."
+        );
       }
 
       const reply = data.candidates?.[0]?.content?.parts
-        ?.map(p => p.text || "").join("") || "Keine Antwort erhalten.";
+        ?.map(part => part.text || "")
+        .join("");
 
-      return new Response(JSON.stringify({ reply }), {
-        headers: cors
-      });
+      return new Response(
+        JSON.stringify({ reply: reply || "Keine Antwort erhalten." }),
+        { headers }
+      );
 
     } catch (error) {
-      return new Response(JSON.stringify({ error: error.message }), {
-        status: 500, headers: cors
-      });
+      return new Response(
+        JSON.stringify({ error: error.message }),
+        { status: 500, headers }
+      );
     }
   }
-}; 
+};
