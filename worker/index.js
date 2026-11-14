@@ -1,119 +1,116 @@
 
 export default {
   async fetch(request, env) {
-    const headers = {
+    const corsHeaders = {
       "Access-Control-Allow-Origin": "https://christoph1807.github.io",
       "Access-Control-Allow-Methods": "POST, OPTIONS",
-      "Access-Control-Allow-Headers": "Content-Type",
-      "Content-Type": "application/json"
+      "Access-Control-Allow-Headers": "Content-Type"
     };
 
     if (request.method === "OPTIONS") {
-      return new Response(null, { headers });
+      return new Response(null, { headers: corsHeaders });
     }
 
+    const jsonResponse = (data, status = 200) =>
+      new Response(JSON.stringify(data), {
+        status,
+        headers: {
+          ...corsHeaders,
+          "Content-Type": "application/json"
+        }
+      });
+
     if (request.method !== "POST") {
-      return new Response(
-        JSON.stringify({ message: "JARVIS ist bereit." }),
-        { headers }
-      );
+      return jsonResponse({ error: "Nur POST ist erlaubt." }, 405);
     }
 
     try {
-      const { message } = await request.json();
+      const body = await request.json();
 
-      if (!message || typeof message !== "string") {
-        throw new Error("Bitte gib eine Nachricht ein.");
+      // Unterstützt den bisherigen Nachrichten-Aufruf
+      // und den neuen Gesprächsverlauf.
+      const messages = Array.isArray(body.messages)
+        ? body.messages
+        : [{ role: "user", content: body.message || "" }];
+
+      const contents = messages
+        .filter(m =>
+          ["user", "model"].includes(m.role) &&
+          typeof m.content === "string" &&
+          m.content.trim()
+        )
+        .slice(-20)
+        .map(m => ({
+          role: m.role,
+          parts: [{ text: m.content }]
+        }));
+
+      if (!contents.length) {
+        return jsonResponse({ error: "Keine Nachricht erhalten." }, 400);
       }
 
-      let lastError = "Gemini ist momentan nicht erreichbar.";
+      const apiUrl =
+        "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent";
+
+      let lastError = "Unbekannter Fehler";
 
       for (let attempt = 0; attempt < 3; attempt++) {
         try {
-          const response = await fetch(
-            "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent",
-            {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-                "x-goog-api-key": env.GEMINI_API_KEY
+          const response = await fetch(apiUrl, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "x-goog-api-key": env.GEMINI_API_KEY
+            },
+            body: JSON.stringify({
+              systemInstruction: {
+                parts: [{
+                  text: "Du bist JARVIS, ein hilfreicher persönlicher KI-Assistent. Antworte auf Deutsch, freundlich, klar und verständlich. Berücksichtige den bisherigen Gesprächsverlauf."
+                }]
               },
-              body: JSON.stringify({
-                systemInstruction: {
-                  parts: [{
-                    text: "Du bist JARVIS, ein intelligenter persönlicher KI-Assistent. Antworte immer auf Deutsch, freundlich, klar und hilfreich."
-                  }]
-                },
-                contents: [{
-                  role: "user",
-                  parts: [{ text: message }]
-                }],
-                generationConfig: {
-                  maxOutputTokens: 1024
-                }
-              }),
-              signal: AbortSignal.timeout(18000)
-            }
-          );
+              contents,
+              generationConfig: {
+                temperature: 0.7,
+                maxOutputTokens: 1024
+              }
+            }),
+            signal: AbortSignal.timeout(18000)
+          });
 
-          const raw = await response.text();
-          let data;
-
-          try {
-            data = JSON.parse(raw);
-          } catch {
-            throw new Error("Google hat eine ungültige Antwort gesendet.");
-          }
+          const data = await response.json();
 
           if (!response.ok) {
-            lastError = data.error?.message || "Gemini Fehler " + response.status;
-
-            if (![408, 429, 500, 502, 503, 504].includes(response.status)) {
-              throw new Error(lastError);
+            lastError = data.error?.message || "Google API Fehler";
+            if (attempt < 2) {
+              await new Promise(resolve =>
+                setTimeout(resolve, 1500 * (attempt + 1))
+              );
+              continue;
             }
-
-            throw new Error(lastError);
+            return jsonResponse({ error: lastError }, 502);
           }
 
-          const reply = data.candidates?.[0]?.content?.parts
-            ?.map(part => part.text || "")
-            .join("");
+          const reply =
+            data.candidates?.[0]?.content?.parts
+              ?.map(part => part.text || "")
+              .join("") || "Ich konnte leider keine Antwort erstellen.";
 
-          if (!reply) {
-            throw new Error("Gemini hat keine Antwort geliefert.");
-          }
-
-          return new Response(
-            JSON.stringify({ reply }),
-            { headers }
-          );
-
+          return jsonResponse({ reply });
         } catch (error) {
-          lastError = error.name === "TimeoutError"
-            ? "Gemini hat zu lange gebraucht."
-            : error.message;
-
+          lastError = error.message || "Verbindungsfehler";
           if (attempt < 2) {
             await new Promise(resolve =>
-              setTimeout(resolve, 1500 * Math.pow(2, attempt))
+              setTimeout(resolve, 1500 * (attempt + 1))
             );
           }
         }
       }
 
-      return new Response(
-        JSON.stringify({
-          error: "JARVIS: " + lastError +
-            " Bitte versuche es in einer Minute erneut."
-        }),
-        { status: 503, headers }
-      );
-
+      return jsonResponse({ error: lastError }, 502);
     } catch (error) {
-      return new Response(
-        JSON.stringify({ error: error.message }),
-        { status: 400, headers }
-      );
+      return jsonResponse({
+        error: error.message || "Interner Fehler"
+      }, 500);
     }
   }
 };
