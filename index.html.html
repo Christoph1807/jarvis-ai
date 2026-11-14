@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#07111f">
+<title>J.A.R.V.I.S. – Persönlicher Assistent</title>
+<style>
+:root{color-scheme:dark;--line:#173b55;--cyan:#55dcff;--muted:#8ba8ba;--white:#eaf8ff}
+*{box-sizing:border-box}body{margin:0;background:radial-gradient(ellipse at 50% 18%,#102a40 0%,#07111f 45%,#03070d 100%);color:var(--white);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;min-height:100vh}
+main{max-width:620px;margin:auto;padding:calc(22px + env(safe-area-inset-top)) 18px calc(24px + env(safe-area-inset-bottom))}
+header{display:flex;justify-content:space-between;align-items:center;gap:10px;font-size:10px;letter-spacing:1.4px;color:var(--muted)}
+.status{color:#79f2c0;letter-spacing:1px;white-space:nowrap}.dot{display:inline-block;width:7px;height:7px;border-radius:50%;background:#79f2c0;box-shadow:0 0 10px #79f2c0;margin-right:7px}
+.hero{text-align:center;padding:32px 0 22px}.reactor{width:184px;height:184px;margin:0 auto;position:relative;border-radius:50%;display:grid;place-items:center}
+.reactor:before,.reactor:after{content:"";position:absolute;inset:7px;border-radius:50%;border:1px solid #2b91b9;box-shadow:0 0 18px #1d9fc455,inset 0 0 20px #1d9fc422}
+.reactor:after{inset:22px;border:2px dashed #4acfff88;animation:spin 24s linear infinite}
+.core{width:94px;height:94px;border-radius:50%;border:2px solid var(--cyan);display:grid;place-items:center;background:radial-gradient(circle,#b7f6ff 0%,#1e9ec8 22%,#0b2b43 58%,#07111f 72%);box-shadow:0 0 20px #44d8ff,0 0 55px #1b9acb88,inset 0 0 18px #b7f6ff66;transition:.25s}
+.core span{font-size:27px;color:#e8fcff;text-shadow:0 0 12px white}
+body.listening .core{box-shadow:0 0 30px #44d8ff,0 0 75px #1b9acb, inset 0 0 25px #fff}
+@keyframes spin{to{transform:rotate(360deg)}}
+h1{font-size:29px;letter-spacing:7px;margin:17px 0 5px;font-weight:500}.sub{font-size:10px;letter-spacing:2.5px;color:var(--muted)}
+.panel{border:1px solid var(--line);background:#091725dd;border-radius:16px;padding:15px;margin:13px 0;box-shadow:0 12px 35px #0005}
+.panel-title{font-size:10px;letter-spacing:2px;color:var(--cyan);margin-bottom:10px}
+#messages{height:178px;overflow:auto;display:flex;flex-direction:column;gap:9px}
+.msg{max-width:92%;padding:10px 12px;border-radius:12px;font-size:14px;line-height:1.45;white-space:pre-wrap;overflow-wrap:anywhere}
+.bot{align-self:flex-start;background:#102b40;border:1px solid #1b5875}.user{align-self:flex-end;background:#123c50;border:1px solid #267b9b}
+.compose{display:flex;gap:8px;margin-top:12px}input{min-width:0;flex:1;background:#06111d;border:1px solid #24506a;border-radius:11px;color:white;padding:13px;font-size:15px;outline:none}
+button{border:1px solid #2d91b5;background:#0b2c42;color:#dffaff;border-radius:11px;padding:12px 13px;font-size:14px}button:disabled{opacity:.45}button.primary{background:#0e506a;border-color:#55dcff}
+.actions{display:grid;grid-template-columns:1fr 1fr;gap:9px}.actions button{min-height:48px}
+.note{font-size:11px;color:var(--muted);line-height:1.5;margin:11px 2px}
+.statusline{font-size:12px;color:var(--muted);margin-top:10px;min-height:18px}
+footer{text-align:center;color:#547286;font-size:10px;letter-spacing:2px;padding:18px}
+</style>
+</head>
+<body>
+<main>
+<header><span>STARK INDUSTRIES // PERSONAL AI</span><span class="status"><i class="dot"></i><span id="topStatus">BEREIT</span></span></header>
+<section class="hero">
+<div class="reactor"><div class="core"><span>J</span></div></div>
+<h1>J.A.R.V.I.S.</h1><div class="sub">DEIN PERSÖNLICHER KI-ASSISTENT</div>
+</section>
+<section class="panel">
+<div class="panel-title">KOMMUNIKATION // CHAT</div>
+<div id="messages" aria-live="polite"><div class="msg bot">Guten Tag. JARVIS ist bereit. Aktiviere „Hey JARVIS“ oder schreibe mir eine Nachricht.</div></div>
+<div class="compose"><input id="prompt" placeholder="Nachricht an JARVIS …" autocomplete="off"><button class="primary" id="send">Senden</button></div>
+</section>
+<section class="panel">
+<div class="panel-title">SPRACHSTEUERUNG // DEUTSCH</div>
+<div class="actions">
+<button id="wake">◉ Hey JARVIS aktivieren</button>
+<button id="speak">🔊 Antwort vorlesen</button>
+</div>
+<div class="statusline" id="voiceStatus">Sprachaktivierung ist ausgeschaltet.</div>
+<p class="note">Wenn aktiviert, sucht die App bei geöffnetem Bildschirm nach „Hey JARVIS“. Nach dem Aktivierungswort kannst du deinen Befehl sprechen. Mikrofonzugriff bitte erlauben.</p>
+</section>
+<section class="panel">
+<div class="panel-title">SYSTEMSTATUS</div>
+<div style="display:flex;justify-content:space-between;font-size:13px;padding:5px 0"><span>Oberfläche</span><span style="color:#79f2c0">BEREIT</span></div>
+<div style="display:flex;justify-content:space-between;font-size:13px;padding:5px 0"><span>Sprachaktivierung</span><span id="wakeState" style="color:#ffd27a">AUS</span></div>
+<div style="display:flex;justify-content:space-between;font-size:13px;padding:5px 0"><span>KI-Verbindung</span><span style="color:#ffd27a">NOCH NICHT VERBUNDEN</span></div>
+</section>
+<p class="note">Version 0.2 ist ein kostenloser Sprachsteuerungs-Prototyp. Noch keine Verbindung zu Claude: Die kostenlose Claude-App-Anmeldung lässt sich nicht direkt als API-Schlüssel verwenden. Auf iPhones kann die Spracherkennung je nach iOS-Version und Browser eingeschränkt sein; die App muss geöffnet und der Bildschirm aktiv bleiben.</p>
+<footer>J.A.R.V.I.S. // VERSION 0.2</footer>
+</main>
+<script>
+const input=document.getElementById('prompt'),messages=document.getElementById('messages');
+const voiceStatus=document.getElementById('voiceStatus'),wakeBtn=document.getElementById('wake');
+let lastAnswer='Ich habe deine Nachricht erhalten. Meine KI-Verbindung ist noch nicht eingerichtet. Im nächsten Schritt verbinden wir JARVIS mit einem KI-Dienst.';
+let wakeOn=false, rec=null, commandMode=false, restartTimer=null;
+function add(text,who){const el=document.createElement('div');el.className='msg '+who;el.textContent=text;messages.appendChild(el);messages.scrollTop=messages.scrollHeight;}
+function send(){const t=input.value.trim();if(!t)return;add(t,'user');input.value='';lastAnswer='Befehl empfangen. Meine KI-Verbindung ist noch nicht eingerichtet. Sobald wir ein KI-Gehirn anbinden, kann ich dir inhaltlich antworten.';add(lastAnswer,'bot');}
+document.getElementById('send').addEventListener('click',send);input.addEventListener('keydown',e=>{if(e.key==='Enter')send();});
+document.getElementById('speak').addEventListener('click',()=>{if(!('speechSynthesis'in window)){voiceStatus.textContent='Sprachausgabe wird hier nicht unterstützt.';return;}speechSynthesis.cancel();const u=new SpeechSynthesisUtterance(lastAnswer);u.lang='de-DE';u.rate=.94;u.pitch=.82;speechSynthesis.speak(u);});
+const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+function setWake(on){wakeOn=on;wakeBtn.textContent=on?'◉ Hey JARVIS deaktivieren':'◉ Hey JARVIS aktivieren';document.getElementById('wakeState').textContent=on?'AKTIV':'AUS';document.getElementById('wakeState').style.color=on?'#79f2c0':'#ffd27a';document.getElementById('topStatus').textContent=on?'ICH HÖRE ZU':'BEREIT';document.body.classList.toggle('listening',on);if(!on&&rec){try{rec.stop()}catch(e){}}else if(on&&rec){try{rec.start()}catch(e){voiceStatus.textContent='Bitte erlaube den Mikrofonzugriff und aktiviere erneut.';}}}
+if(!SR){wakeBtn.disabled=true;voiceStatus.textContent='Diese iPhone-/Browser-Version unterstützt die benötigte Spracherkennung nicht. Nutze vorerst die Texteingabe.';}
+else{
+rec=new SR();rec.lang='de-DE';rec.continuous=true;rec.interimResults=false;rec.maxAlternatives=1;
+rec.onstart=()=>{if(wakeOn)voiceStatus.textContent=commandMode?'Ich höre deinen Befehl …':'Warte auf „Hey JARVIS“ …';};
+rec.onresult=e=>{for(let i=e.resultIndex;i<e.results.length;i++){if(!e.results[i].isFinal)continue;let heard=e.results[i][0].transcript.trim();let lower=heard.toLocaleLowerCase('de-DE');if(!commandMode){let idx=lower.indexOf('hey jarvis');if(idx!==-1){let rest=heard.slice(idx+10).trim().replace(/^[,.:;!?\s]+/,'');if(rest){input.value=rest;voiceStatus.textContent='Aktivierungswort erkannt. Befehl wird übernommen.';send();}else{commandMode=true;voiceStatus.textContent='Ja, ich höre. Was kann ich für dich tun?';} }}else{input.value=heard;voiceStatus.textContent='Befehl erkannt und übernommen.';send();commandMode=false;}}};
+rec.onerror=e=>{voiceStatus.textContent='Spracherkennung: '+(e.error||'Fehler')+'. Prüfe Mikrofonberechtigung oder Browser-Unterstützung.';};
+rec.onend=()=>{if(wakeOn){clearTimeout(restartTimer);restartTimer=setTimeout(()=>{if(wakeOn){try{rec.start()}catch(e){voiceStatus.textContent='Spracherkennung pausiert. Tippe auf „Deaktivieren“ und dann erneut auf „Aktivieren“. ';}},800);}};
+wakeBtn.addEventListener('click',()=>setWake(!wakeOn));
+}
+</script>
+</body>
+</html>
