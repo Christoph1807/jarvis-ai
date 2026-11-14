@@ -126,10 +126,10 @@ export default {
           updatedMemory = parsed
             .filter(x => typeof x === "string")
             .slice(-30);
-        }
-      } catch (memoryError) {
-        // Bei einem Fehler bleiben die bisherigen Erinnerungen erhalten.
-      }
+        }} catch (memoryError) {
+  updatedMemory = oldMemory;
+  console.error("Gedächtnis-Fehler:", memoryError.message);
+}
 
       return respond({
         reply,
