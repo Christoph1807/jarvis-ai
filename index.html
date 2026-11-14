@@ -85,18 +85,54 @@ footer{text-align:center;color:#547286;font-size:10px;letter-spacing:2px;padding
 <footer>J.A.R.V.I.S. // VERSION 1.0</footer>
 </main>
 
+
 <script>
 const WORKER_URL = "https://javis-ai.christophhuber94.workers.dev/";
+const MEMORY_KEY = "jarvis_conversation_memory";
+const MAX_MESSAGES = 20;
 
 const input = document.getElementById("prompt");
 const messages = document.getElementById("messages");
 const sendBtn = document.getElementById("send");
 const voiceStatus = document.getElementById("voiceStatus");
 const wakeBtn = document.getElementById("wake");
+
 let lastAnswer = "JARVIS ist bereit.";
 let wakeOn = false;
 let rec = null;
 let commandMode = false;
+let conversationHistory = [];
+
+function loadMemory() {
+  try {
+    const saved = localStorage.getItem(MEMORY_KEY);
+    conversationHistory = saved ? JSON.parse(saved) : [];
+
+    if (!Array.isArray(conversationHistory)) {
+      conversationHistory = [];
+    }
+
+    conversationHistory = conversationHistory
+      .filter(m =>
+        ["user", "model"].includes(m.role) &&
+        typeof m.content === "string"
+      )
+      .slice(-MAX_MESSAGES);
+  } catch (e) {
+    conversationHistory = [];
+  }
+}
+
+function saveMemory() {
+  try {
+    localStorage.setItem(
+      MEMORY_KEY,
+      JSON.stringify(conversationHistory.slice(-MAX_MESSAGES))
+    );
+  } catch (e) {
+    voiceStatus.textContent = "Speichern des Gedächtnisses nicht möglich.";
+  }
+}
 
 function addMessage(text, who) {
   const el = document.createElement("div");
@@ -106,12 +142,62 @@ function addMessage(text, who) {
   messages.scrollTop = messages.scrollHeight;
 }
 
+function showHistory() {
+  messages.innerHTML = "";
+
+  if (conversationHistory.length === 0) {
+    addMessage("Guten Tag. JARVIS ist bereit. Was kann ich für dich tun?", "bot");
+    return;
+  }
+
+  conversationHistory.forEach(m => {
+    addMessage(m.content, m.role === "user" ? "user" : "bot");
+  });
+}
+
+function clearMemory() {
+  conversationHistory = [];
+
+  try {
+    localStorage.removeItem(MEMORY_KEY);
+  } catch (e) {}
+
+  messages.innerHTML = "";
+  lastAnswer = "Dein Gesprächsgedächtnis wurde gelöscht.";
+
+  addMessage(lastAnswer, "bot");
+  voiceStatus.textContent = "Gesprächsgedächtnis gelöscht.";
+}
+
 async function send() {
   const message = input.value.trim();
+
   if (!message || sendBtn.disabled) return;
+
+  const command = message.toLocaleLowerCase("de-DE");
+
+  if (
+    command === "jarvis vergiss alles" ||
+    command === "jarvis, vergiss alles" ||
+    command === "lösche gedächtnis" ||
+    command === "lösche alle erinnerungen"
+  ) {
+    input.value = "";
+    clearMemory();
+    return;
+  }
 
   addMessage(message, "user");
   input.value = "";
+
+  conversationHistory.push({
+    role: "user",
+    content: message
+  });
+
+  conversationHistory = conversationHistory.slice(-MAX_MESSAGES);
+  saveMemory();
+
   sendBtn.disabled = true;
   document.getElementById("topStatus").textContent = "DENKT ...";
 
@@ -119,7 +205,9 @@ async function send() {
     const response = await fetch(WORKER_URL, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ message })
+      body: JSON.stringify({
+        messages: conversationHistory
+      })
     });
 
     const data = await response.json();
@@ -129,13 +217,24 @@ async function send() {
     }
 
     lastAnswer = data.reply || "Ich habe leider keine Antwort erhalten.";
+
     addMessage(lastAnswer, "bot");
+
+    conversationHistory.push({
+      role: "model",
+      content: lastAnswer
+    });
+
+    conversationHistory = conversationHistory.slice(-MAX_MESSAGES);
+    saveMemory();
+
     document.getElementById("aiState").textContent = "VERBUNDEN";
     document.getElementById("aiState").style.color = "#79f2c0";
 
   } catch (error) {
     lastAnswer = "Verbindungsfehler: " + error.message;
     addMessage(lastAnswer, "bot");
+
     document.getElementById("aiState").textContent = "FEHLER";
     document.getElementById("aiState").style.color = "#ff8888";
   } finally {
@@ -144,29 +243,43 @@ async function send() {
   }
 }
 
+// Gedächtnis beim Öffnen wiederherstellen
+loadMemory();
+showHistory();
+
 sendBtn.addEventListener("click", send);
+
 input.addEventListener("keydown", event => {
   if (event.key === "Enter") send();
 });
 
+// Sprachausgabe
 document.getElementById("speak").addEventListener("click", () => {
   if (!("speechSynthesis" in window)) {
     voiceStatus.textContent = "Sprachausgabe wird nicht unterstützt.";
     return;
   }
+
   speechSynthesis.cancel();
+
   const utterance = new SpeechSynthesisUtterance(lastAnswer);
   utterance.lang = "de-DE";
   utterance.rate = 0.94;
   utterance.pitch = 0.82;
+
   speechSynthesis.speak(utterance);
 });
 
+// Sprachsteuerung
 const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
 
 function setWake(on) {
   wakeOn = on;
-  wakeBtn.textContent = on ? "◉ Hey JARVIS deaktivieren" : "◉ Hey JARVIS aktivieren";
+
+  wakeBtn.textContent = on
+    ? "◉ Hey JARVIS deaktivieren"
+    : "◉ Hey JARVIS aktivieren";
+
   document.getElementById("wakeState").textContent = on ? "AKTIV" : "AUS";
   document.getElementById("topStatus").textContent = on ? "ICH HÖRE ZU" : "BEREIT";
 
@@ -183,7 +296,8 @@ function setWake(on) {
 
 if (!SR) {
   wakeBtn.disabled = true;
-  voiceStatus.textContent = "Spracherkennung wird in diesem Browser nicht unterstützt. Nutze vorerst die Texteingabe.";
+  voiceStatus.textContent =
+    "Spracherkennung wird in diesem Browser nicht unterstützt. Nutze vorerst die Texteingabe.";
 } else {
   rec = new SR();
   rec.lang = "de-DE";
@@ -191,7 +305,11 @@ if (!SR) {
   rec.interimResults = false;
 
   rec.onstart = () => {
-    if (wakeOn) voiceStatus.textContent = commandMode ? "Ich höre deinen Befehl ..." : "Warte auf Hey JARVIS ...";
+    if (wakeOn) {
+      voiceStatus.textContent = commandMode
+        ? "Ich höre deinen Befehl ..."
+        : "Warte auf Hey JARVIS ...";
+    }
   };
 
   rec.onresult = event => {
@@ -203,14 +321,17 @@ if (!SR) {
 
       if (!commandMode) {
         const index = lower.indexOf("hey jarvis");
+
         if (index !== -1) {
           const rest = heard.slice(index + 10).trim();
+
           if (rest) {
             input.value = rest;
             send();
           } else {
             commandMode = true;
-            voiceStatus.textContent = "Ja, ich höre. Was kann ich für dich tun?";
+            voiceStatus.textContent =
+              "Ja, ich höre. Was kann ich für dich tun?";
           }
         }
       } else {
@@ -238,5 +359,6 @@ if (!SR) {
   wakeBtn.addEventListener("click", () => setWake(!wakeOn));
 }
 </script>
+
 </body>
 </html>
