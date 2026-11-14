@@ -86,9 +86,12 @@ footer{text-align:center;color:#547286;font-size:10px;letter-spacing:2px;padding
 </main>
 
 
+
 <script>
 const WORKER_URL = "https://javis-ai.christophhuber94.workers.dev/";
+
 const MEMORY_KEY = "jarvis_conversation_memory";
+const LONG_MEMORY_KEY = "jarvis_long_term_memory";
 const MAX_MESSAGES = 20;
 
 const input = document.getElementById("prompt");
@@ -102,11 +105,13 @@ let wakeOn = false;
 let rec = null;
 let commandMode = false;
 let conversationHistory = [];
+let longTermMemory = [];
 
 function loadMemory() {
   try {
-    const saved = localStorage.getItem(MEMORY_KEY);
-    conversationHistory = saved ? JSON.parse(saved) : [];
+    conversationHistory = JSON.parse(
+      localStorage.getItem(MEMORY_KEY) || "[]"
+    );
 
     if (!Array.isArray(conversationHistory)) {
       conversationHistory = [];
@@ -118,8 +123,17 @@ function loadMemory() {
         typeof m.content === "string"
       )
       .slice(-MAX_MESSAGES);
+
+    longTermMemory = JSON.parse(
+      localStorage.getItem(LONG_MEMORY_KEY) || "[]"
+    );
+
+    if (!Array.isArray(longTermMemory)) {
+      longTermMemory = [];
+    }
   } catch (e) {
     conversationHistory = [];
+    longTermMemory = [];
   }
 }
 
@@ -129,8 +143,13 @@ function saveMemory() {
       MEMORY_KEY,
       JSON.stringify(conversationHistory.slice(-MAX_MESSAGES))
     );
+
+    localStorage.setItem(
+      LONG_MEMORY_KEY,
+      JSON.stringify(longTermMemory.slice(-30))
+    );
   } catch (e) {
-    voiceStatus.textContent = "Speichern des Gedächtnisses nicht möglich.";
+    voiceStatus.textContent = "Speichern nicht möglich.";
   }
 }
 
@@ -157,16 +176,16 @@ function showHistory() {
 
 function clearMemory() {
   conversationHistory = [];
+  longTermMemory = [];
 
-  try {
-    localStorage.removeItem(MEMORY_KEY);
-  } catch (e) {}
+  localStorage.removeItem(MEMORY_KEY);
+  localStorage.removeItem(LONG_MEMORY_KEY);
 
   messages.innerHTML = "";
-  lastAnswer = "Dein Gesprächsgedächtnis wurde gelöscht.";
+  lastAnswer = "Gesprächsgedächtnis und Langzeitgedächtnis wurden gelöscht.";
 
   addMessage(lastAnswer, "bot");
-  voiceStatus.textContent = "Gesprächsgedächtnis gelöscht.";
+  voiceStatus.textContent = "Alle Erinnerungen gelöscht.";
 }
 
 async function send() {
@@ -206,7 +225,8 @@ async function send() {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        messages: conversationHistory
+        messages: conversationHistory,
+        memory: longTermMemory
       })
     });
 
@@ -226,7 +246,17 @@ async function send() {
     });
 
     conversationHistory = conversationHistory.slice(-MAX_MESSAGES);
+
+    if (Array.isArray(data.memory)) {
+      longTermMemory = data.memory
+        .filter(item => typeof item === "string")
+        .slice(-30);
+    }
+
     saveMemory();
+
+    voiceStatus.textContent =
+      "Langzeitgedächtnis: " + longTermMemory.length + " Erinnerungen gespeichert.";
 
     document.getElementById("aiState").textContent = "VERBUNDEN";
     document.getElementById("aiState").style.color = "#79f2c0";
@@ -246,6 +276,9 @@ async function send() {
 // Gedächtnis beim Öffnen wiederherstellen
 loadMemory();
 showHistory();
+
+voiceStatus.textContent =
+  "Langzeitgedächtnis: " + longTermMemory.length + " Erinnerungen gespeichert.";
 
 sendBtn.addEventListener("click", send);
 
@@ -359,6 +392,7 @@ if (!SR) {
   wakeBtn.addEventListener("click", () => setWake(!wakeOn));
 }
 </script>
+
 
 </body>
 </html>
